@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detailed Analysis - AI Image Detector</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .back-btn {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 1rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .back-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .final-decision {
+            text-align: center;
+            border: 4px solid;
+            border-radius: 15px;
+            padding: 30px;
+        }
+        
+        .final-decision.fake {
+            border-color: #e74c3c;
+            background: rgba(231, 76, 60, 0.1);
+        }
+        
+        .final-decision.real {
+            border-color: #2ecc71;
+            background: rgba(46, 204, 113, 0.1);
+        }
+        
+        .decision-text {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        
+        .confidence {
+            font-size: 1.8rem;
+            color: #2c3e50;
+        }
+        
+        .probability-bars {
+            margin-top: 20px;
+        }
+        
+        .bar-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        
+        .bar-container {
+            height: 30px;
+            background: #ecf0f1;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .bar {
+            height: 100%;
+            transition: width 1s ease;
+        }
+        
+        .bar-fake {
+            background: linear-gradient(90deg, #e74c3c, #c0392b);
+        }
+        
+        .bar-real {
+            background: linear-gradient(90deg, #2ecc71, #27ae60);
+        }
+        
+        .models-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-top: 40px;
+        }
+        
+        .model-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            border-top: 5px solid;
+            transition: transform 0.3s ease;
+        }
+        
+        .model-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .model-card.jpeg {
+            border-color: #3498db;
+        }
+        
+        .model-card.efficientnet {
+            border-color: #9b59b6;
+        }
+        
+        .model-card.xgboost {
+            border-color: #e67e22;
+        }
+        
+        .model-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .model-name {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .model-decision {
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 5px 15px;
+            border-radius: 20px;
+        }
+        
+        .decision-fake {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .decision-real {
+            background: #2ecc71;
+            color: white;
+        }
+        
+        .model-probability {
+            font-size: 1.8rem;
+            font-weight: bold;
+            text-align: center;
+            margin: 15px 0;
+        }
+        
+        .model-details {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+        }
+        
+        .detail-label {
+            color: #7f8c8d;
+        }
+        
+        .detail-value {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .image-section {
+            margin-top: 40px;
+            text-align: center;
+        }
+        
+        .image-container {
+            max-width: 800px;
+            margin: 0 auto 30px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .image-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .image-title {
+            font-size: 1.3rem;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        
+        .voting-section {
+            background: linear-gradient(135deg, #3498db, #2c3e50);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 40px;
+            text-align: center;
+        }
+        
+        .voting-title {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+        }
+        
+        .votes-container {
+            display: flex;
+            justify-content: center;
+            gap: 50px;
+            margin-top: 20px;
+        }
+        
+        .vote-count {
+            font-size: 3rem;
+            font-weight: bold;
+        }
+        
+        .vote-label {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .vote-fake {
+            color: #ff6b6b;
+        }
+        
+        .vote-real {
+            color: #51cf66;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .models-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .decision-text {
+                font-size: 2.5rem;
+            }
+            
+            .votes-container {
+                flex-direction: column;
+                gap: 20px;
+            }
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 100px;
+            font-size: 1.5rem;
+            color: #7f8c8d;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 100px;
+            color: #e74c3c;
+            font-size: 1.2rem;
+        }
+        
+        .no-data a {
+            color: #3498db;
+            text-decoration: none;
+            margin-top: 20px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-btn">← Back to Analyzer</a>
+            <h1>Detailed Image Analysis</h1>
+            <p>Comprehensive breakdown of AI detection results</p>
+        </div>
+        
+        <div class="content">
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>Loading analysis data...</p>
+            </div>
+            
+            <div id="no-data" class="no-data" style="display: none;">
+                <p>No analysis data found.</p>
+                <a href="/">Go back to analyze an image</a>
+            </div>
+            
+            <div id="analysis-content" style="display: none;">
+                <!-- Content will be loaded here -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get data from localStorage
+            const resultData = localStorage.getItem('detectionResult');
+            
+            if (!resultData) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('no-data').style.display = 'block';
+                return;
+            }
+            
+            const data = JSON.parse(resultData);
+            
+            // Build the detailed analysis page
+            const isFake = data.final_decision === 'FAKE';
+            
+            let contentHTML = `
+                <div class="summary">
+                    <div class="card final-decision ${isFake ? 'fake' : 'real'}">
+                        <div class="decision-text" style="color: ${isFake ? '#e74c3c' : '#2ecc71'}">
+                            ${data.final_decision}
+                        </div>
+                        <div class="confidence">
+                            Confidence: ${data.final_confidence}%
+                        </div>
+                        
+                        <div class="probability-bars">
+                            <div class="bar-label">
+                                <span style="color: #e74c3c;">FAKE</span>
+                                <span>${data.fake_probability}%</span>
+                            </div>
+                            <div class="bar-container">
+                                <div class="bar bar-fake" style="width: ${data.fake_probability}%"></div>
+                            </div>
+                            
+                            <div class="bar-label">
+                                <span style="color: #2ecc71;">REAL</span>
+                                <span>${data.real_probability}%</span>
+                            </div>
+                            <div class="bar-container">
+                                <div class="bar bar-real" style="width: ${data.real_probability}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <h2 style="color: #2c3e50; margin-bottom: 20px; font-size: 1.5rem;">Image Information</h2>
+                        <div style="font-size: 1.1rem;">
+                            <div style="margin-bottom: 10px;">
+                                <strong>Image:</strong> ${data.image_name}
+                            </div>
+                            <div>
+                                <strong>Analysis Time:</strong> ${new Date().toLocaleString()}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add individual model results
+            if (data.detailed && data.detailed.individual_results) {
+                contentHTML += `
+                    <h2 style="color: #2c3e50; margin: 40px 0 20px; font-size: 1.8rem;">Individual Model Analysis</h2>
+                    <div class="models-grid">
+                `;
+                
+                data.detailed.individual_results.forEach(model => {
+                    const isModelFake = model.decision === 'FAKE';
+                    const modelClass = model.model.toLowerCase().includes('jpeg') ? 'jpeg' : 
+                                      model.model.toLowerCase().includes('efficient') ? 'efficientnet' : 'xgboost';
+                    
+                    contentHTML += `
+                        <div class="model-card ${modelClass}">
+                            <div class="model-header">
+                                <div class="model-name">${model.model}</div>
+                                <div class="model-decision ${isModelFake ? 'decision-fake' : 'decision-real'}">
+                                    ${model.decision}
+                                </div>
+                            </div>
+                            
+                            <div class="model-probability">
+                                <div style="color: #e74c3c; margin-bottom: 5px;">
+                                    FAKE: ${model.fake_prob}%
+                                </div>
+                                <div style="color: #2ecc71;">
+                                    REAL: ${model.real_prob}%
+                                </div>
+                            </div>
+                            
+                            <div class="model-details">
+                                <div class="detail-row">
+                                    <span class="detail-label">Confidence:</span>
+                                    <span class="detail-value">${model.confidence}%</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="detail-label">Weight:</span>
+                                    <span class="detail-value">${modelClass === 'jpeg' ? '35%' : modelClass === 'efficientnet' ? '45%' : '20%'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                contentHTML += `</div>`;
+            }
+            
+            // Add voting results
+            if (data.detailed && data.detailed.voting) {
+                contentHTML += `
+                    <div class="voting-section">
+                        <h2 class="voting-title">Model Voting Results</h2>
+                        <div class="votes-container">
+                            <div>
+                                <div class="vote-count vote-fake">${data.detailed.voting.fake_votes}</div>
+                                <div class="vote-label">FAKE Votes</div>
+                            </div>
+                            <div>
+                                <div class="vote-count vote-real">${data.detailed.voting.real_votes}</div>
+                                <div class="vote-label">REAL Votes</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px; font-size: 1.2rem;">
+                            Majority Decision: <strong>${data.detailed.voting.majority_decision}</strong>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Add heatmap if available
+            if (data.heatmap) {
+                contentHTML += `
+                    <div class="image-section">
+                        <h2 class="image-title">Analysis Heatmap</h2>
+                        <div class="image-container">
+                            <img src="data:image/png;base64,${data.heatmap}" alt="Analysis Heatmap">
+                        </div>
+                        <p style="color: #7f8c8d; max-width: 800px; margin: 0 auto;">
+                            This heatmap shows the probability distribution across all models. 
+                            Red indicates higher fake probability, green indicates higher real probability.
+                        </p>
+                    </div>
+                `;
+            }
+            
+            // Add ensemble details
+            if (data.detailed && data.detailed.ensemble) {
+                contentHTML += `
+                    <div class="card" style="margin-top: 40px;">
+                        <h2 style="color: #2c3e50; margin-bottom: 20px; font-size: 1.5rem;">Ensemble Details</h2>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                            <div>
+                                <div style="font-size: 0.9rem; color: #7f8c8d; margin-bottom: 5px;">Final Ensemble Probability</div>
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #2c3e50;">
+                                    FAKE: ${data.detailed.ensemble.fake_probability.toFixed(1)}%
+                                </div>
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #2c3e50;">
+                                    REAL: ${data.detailed.ensemble.real_probability.toFixed(1)}%
+                                </div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.9rem; color: #7f8c8d; margin-bottom: 5px;">Decision Confidence</div>
+                                <div style="font-size: 1.5rem; font-weight: bold; color: #2c3e50;">
+                                    ${data.detailed.ensemble.confidence.toFixed(1)}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Update the page
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('analysis-content').style.display = 'block';
+            document.getElementById('analysis-content').innerHTML = contentHTML;
+            
+            // Add spinner CSS
+            if (!document.getElementById('spinner-style')) {
+                const style = document.createElement('style');
+                style.id = 'spinner-style';
+                style.textContent = `
+                    .spinner {
+                        border: 5px solid rgba(52, 152, 219, 0.2);
+                        border-radius: 50%;
+                        border-top: 5px solid #3498db;
+                        width: 50px;
+                        height: 50px;
+                        animation: spin 1s linear infinite;
+                        margin: 20px auto;
+                    }
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        });
+    </script>
+</body>
+</html>

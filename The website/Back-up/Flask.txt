@@ -1,0 +1,346 @@
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+import os
+import sys
+import uuid
+import base64
+import re
+from werkzeug.utils import secure_filename
+
+# Add python directory to path
+sys.path.append(os.path.join(os.path.dirname(__file__), 'python'))
+
+# Try to import ensemble detector
+try:
+    from python.ensemble_detector import EnsembleDetector
+    print("✅ Successfully imported ensemble detector")
+    
+    # Initialize
+    ensemble = EnsembleDetector(
+        jpeg_model_path="python/model_complete_gpu.pth",
+        jpeg_scaler_path="python/scaler_gpu.pkl",
+        efficientnet_path="python/no_fft_model.pth",
+        xgb_model_path="python/xgb_noise_model.pkl",
+        xgb_scaler_path="python/xgb_scaler.pkl",
+        results_dir="results"
+    )
+    
+except Exception as e:
+    print(f"❌ Error initializing ensemble detector: {e}")
+    import traceback
+    traceback.print_exc()
+    ensemble = None
+
+app = Flask(__name__)
+CORS(app)
+
+# Configuration
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'bmp', 'tiff', 'webp', 'gif'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+# Create directories
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs('results', exist_ok=True)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def validate_url(url):
+    """Validate and clean URL"""
+    # Remove any extra spaces
+    url = url.strip()
+    
+    # Check if it's a common image hosting URL pattern
+    common_domains = [
+        'imgur.com', 'flickr.com', 'instagram.com', 'pinterest.com',
+        'unsplash.com', 'pexels.com', 'pixabay.com', 'google.com',
+        'facebook.com', 'twitter.com', 'reddit.com'
+    ]
+    
+    # If it looks like a local file path, convert to file://
+    if url.startswith('C:\\') or url.startswith('/') or url.startswith('./'):
+        return None, "Please upload local files using the file upload option"
+    
+    # Add https:// if no protocol specified
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+    
+    # Basic URL validation
+    url_pattern = re.compile(
+        r'^(https?://)'  # http:// or https://
+        r'([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}'  # domain
+        r'(:\d+)?'  # optional port
+        r'(/.*)?$'  # optional path
+    )
+    
+    if not url_pattern.match(url):
+        return None, "Invalid URL format"
+    
+    return url, None
+
+def download_image_from_url(url):
+    """Download image from URL with better error handling"""
+    try:
+        import urllib.request
+        import urllib.error
+        
+        print(f"🌐 Downloading from: {url}")
+        
+        # Set headers to mimic a browser
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        }
+        
+        # Create request
+        req = urllib.request.Request(url, headers=headers)
+        
+        # Open URL with timeout
+        with urllib.request.urlopen(req, timeout=30) as response:
+            # Check content type
+            content_type = response.headers.get('Content-Type', '').lower()
+            
+            # Check if it's an image
+            if not any(img_type in content_type for img_type in ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp']):
+                # Try to read first few bytes to check for image magic numbers
+                first_bytes = response.read(4)
+                response = urllib.request.urlopen(req, timeout=30)  # Reopen
+        
+                # Common image magic numbers
+                magic_numbers = {
+                    b'\xff\xd8\xff': 'jpg',
+                    b'\x89PNG': 'png',
+                    b'GIF8': 'gif',
+                    b'RIFF': 'webp',
+                    b'BM': 'bmp'
+                }
+                
+                for magic, ext in magic_numbers.items():
+                    if first_bytes.startswith(magic):
+                        content_type = f'image/{ext}'
+                        break
+                else:
+                    return None, f"URL does not point to an image. Content-Type: {content_type}"
+            
+            # Get filename from URL or generate one
+            filename = os.path.basename(url).split('?')[0].split('#')[0]
+            if not filename or '.' not in filename:
+                # Extract extension from content type
+                if 'jpeg' in content_type or 'jpg' in content_type:
+                    ext = 'jpg'
+                elif 'png' in content_type:
+                    ext = 'png'
+                elif 'gif' in content_type:
+                    ext = 'gif'
+                elif 'webp' in content_type:
+                    ext = 'webp'
+                else:
+                    ext = 'jpg'
+                filename = f"downloaded_image.{ext}"
+            
+            # Generate unique filename
+            unique_filename = f"url_{uuid.uuid4().hex}_{filename}"
+            image_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+            
+            # Ensure upload directory exists
+            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+            
+            # Download and save file
+            with open(image_path, 'wb') as f:
+                # Read in chunks
+                while True:
+                    chunk = response.read(8192)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+            
+            print(f"✅ Image downloaded successfully: {image_path}")
+            return image_path, None
+            
+    except urllib.error.URLError as e:
+        return None, f"Network error: {str(e)}"
+    except Exception as e:
+        return None, f"Download failed: {str(e)}"
+
+@app.route('/')
+def index():
+    return send_file('index.html')
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    if '..' in filename or filename.startswith('/'):
+        return "Forbidden", 403
+    if os.path.exists(filename):
+        return send_file(filename)
+    return f"File not found: {filename}", 404
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        'status': 'healthy' if ensemble else 'unhealthy',
+        'models_loaded': bool(ensemble)
+    })
+
+@app.route('/detect', methods=['POST'])
+def detect_image():
+    if not ensemble:
+        return jsonify({'error': 'Backend models not loaded'}), 503
+    
+    try:
+        # Debug info
+        print(f"\n📨 Received /detect request")
+        print(f"   Content-Type: {request.content_type}")
+        print(f"   Form keys: {list(request.form.keys())}")
+        print(f"   Files: {list(request.files.keys())}")
+        
+        # Check for file upload OR URL
+        has_file = 'image' in request.files
+        has_url = 'image_url' in request.form
+        
+        if not has_file and not has_url:
+            return jsonify({'error': 'No image provided'}), 400
+        
+        image_path = None
+        
+        # Handle file upload
+        if has_file:
+            file = request.files['image']
+            print(f"📁 File received: {file.filename}")
+            
+            if file.filename == '':
+                return jsonify({'error': 'No selected file'}), 400
+            
+            if file and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                unique_filename = f"{uuid.uuid4().hex}_{filename}"
+                image_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+                os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+                file.save(image_path)
+                print(f"✅ File saved: {image_path}")
+            else:
+                return jsonify({
+                    'error': 'File type not allowed',
+                    'allowed_types': list(ALLOWED_EXTENSIONS)
+                }), 400
+        
+        # Handle URL input - FIXED VERSION
+        elif has_url:
+            url_input = request.form['image_url'].strip()
+            print(f"🔗 URL input: {url_input}")
+            
+            if not url_input:
+                return jsonify({'error': 'Empty URL provided'}), 400
+            
+            # Validate URL
+            url, error = validate_url(url_input)
+            if error:
+                return jsonify({'error': error}), 400
+            
+            print(f"🔍 Validated URL: {url}")
+            
+            # Try to download image
+            image_path, error = download_image_from_url(url)
+            if error:
+                return jsonify({'error': error}), 400
+        
+        # Verify we have an image
+        if not image_path or not os.path.exists(image_path):
+            return jsonify({'error': 'Failed to process image'}), 500
+        
+        # Check file size
+        file_size = os.path.getsize(image_path)
+        print(f"📊 File size: {file_size} bytes")
+        
+        if file_size == 0:
+            os.remove(image_path)
+            return jsonify({'error': 'Downloaded file is empty'}), 400
+        
+        # Verify it's a valid image
+        try:
+            from PIL import Image
+            with Image.open(image_path) as img:
+                img.verify()
+                # Reopen and convert to RGB if needed
+                img = Image.open(image_path)
+                print(f"✅ Image verified: {img.size}, {img.mode}")
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                    img.save(image_path)
+        except Exception as e:
+            if os.path.exists(image_path):
+                os.remove(image_path)
+            return jsonify({'error': f'Invalid image file: {str(e)}'}), 400
+        
+        # Run detection
+        print(f"🔍 Analyzing image...")
+        result = ensemble.predict_ensemble(image_path)
+        
+        if 'error' in result:
+            if os.path.exists(image_path):
+                os.remove(image_path)
+            return jsonify({'error': result['error']}), 500
+        
+        # Generate simple heatmap
+        heatmap_base64 = None
+        try:
+            heatmap_path = os.path.join(ensemble.results_dir, 
+                                       f"simple_heatmap_{os.path.splitext(os.path.basename(image_path))[0]}.png")
+            ensemble._generate_simple_heatmap(result, heatmap_path)
+            
+            if os.path.exists(heatmap_path):
+                with open(heatmap_path, 'rb') as f:
+                    heatmap_base64 = base64.b64encode(f.read()).decode('utf-8')
+        except Exception as e:
+            print(f"⚠️ Could not generate heatmap: {e}")
+        
+        # Prepare response
+        response_data = {
+            'success': True,
+            'image_name': result['image'],
+            'final_decision': result['final_decision'],
+            'final_confidence': round(result['final_confidence'] * 100, 1),
+            'fake_probability': round(result['ensemble']['fake_probability'] * 100, 1),
+            'real_probability': round(result['ensemble']['real_probability'] * 100, 1),
+            'heatmap': heatmap_base64,
+            'analysis_time': result['analysis_time'],
+            
+            # Detailed results
+            'detailed_results': {
+                'individual_results': result['individual_results'],
+                'voting': result['voting'],
+                'ensemble': result['ensemble']
+            }
+        }
+        
+        print(f"✅ Analysis complete: {result['final_decision']} ({result['final_confidence']:.1%})")
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+@app.route('/details')
+def details_page():
+    """New page for detailed analysis"""
+    if os.path.exists('details.html'):
+        return send_file('details.html')
+    else:
+        return "Details page not found. Please create details.html file.", 404
+
+if __name__ == '__main__':
+    print("\n" + "="*80)
+    print("🌐 Fake Image Detector")
+    print("="*80)
+    print(f"🔧 Running on: http://127.0.0.1:5000")
+    print(f"📁 Upload folder: {UPLOAD_FOLDER}")
+    print("="*80 + "\n")
+    
+    app.run(host='127.0.0.1', port=5000, debug=True)
