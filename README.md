@@ -6,7 +6,7 @@ Algorithms used:<br>
 <strong>2- JPEG Atrifact Analysis</strong><br>
 <strong>3- Noice Consistency Analysis</strong><br>
 
-# The decisoin making was calculated via Voting system of the three Algorithms
+# The decision making was calculated via Voting system of the three Algorithms
 
 # NOTE:
 
