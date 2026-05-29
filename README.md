@@ -1,10 +1,10 @@
 # AI-Project
 Graduate Project
 This Project contains Three Algorithms that Analyzes pictures uploaded locally or using URL
-Algorithms used:
-1- Efficient Net B0<br>
-2- JPEG Atrifact Analysis
-3- Noice Consistency Analysis
+Algorithms used:<br>
+<strong>1- Efficient Net B0</strong><br>
+2- JPEG Atrifact Analysis<br>
+3- Noice Consistency Analysis<br>
 The decisoin making was calculated via Voting system of the three Algorithms
 NOTE:
 This Project was developed with limited resources and the algorithms are in need of a lot more training 
