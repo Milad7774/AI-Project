@@ -10,6 +10,6 @@ Algorithms used:<br>
 
 # NOTE:
 
-This Project was developed with limited resources and the algorithms are in need of a lot more training 
-Live preview for the Front-End Part:<br>
+This Project was developed with limited resources and the algorithms are in need of a lot more training<br>
+# Live preview for the Front-End Part:<br>
 [Link](https://milad7774.github.io/AI-Project/The%20website/index.html)
