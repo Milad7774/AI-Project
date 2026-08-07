@@ -147,6 +147,15 @@ button:hover {
     text-align: center;
     animation: text-color 10s infinite linear;
 }
+.MadeBy{
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    font-size: 10px;
+}
+.MadeBy a{
+    cursor: pointer;
+}
 .container{
     margin: 5px 0 5px 0;
     position: relative;
