@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Detector</title>
+    <link rel="icon" href="images/Best-AI-Detectors-v2-1.jpg">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+</head>
+<body>
+    <header class="welcome">
+        <span class="MadeBy">Developed By <a href="https://github.com/Milad7774">Milad</a></span>
+        <span>Fake Image Detector</span>
+        <div id="status-indicator" style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%);">
+            <span id="api-status" style="font-size: 14px; padding: 5px 10px; border-radius: 15px; 
+                background: rgba(0,0,0,0.3); display: none;">
+                Checking server...
+            </span>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="upload">
+            <form id="upload-form">
+                <span class="upload-text">Upload an image or paste a URL:</span>
+                
+                <div id="image-preview-container">
+                    <img id="preview" src="#" class="img-pre" alt="Image preview" 
+                         onerror="this.style.display='none';">
+                </div>
+                
+                <input id="imageInput" type="file" name="image" accept="image/*" 
+                       class="img-input file-upload" style="margin-left: 40px;">
+                
+                <button type="button" class="submit" onclick="color(); return false;">Analyze Image</button>
+                
+                <span class="link-input" onclick="changeType(); return false;">Use URL Instead</span>
+                
+                <div id="file-info" style="display: none; margin-top: 10px; font-size: 12px; color: #666;">
+                    No file selected
+                </div>
+            </form>
+            
+            <div id="instructions" style="position: absolute; bottom: 20px; width: 90%; left: 5%; 
+                 font-size: 12px; color: #666; text-align: center; padding: 10px; 
+                 background: rgba(255,255,255,0.2); border-radius: 5px;">
+                <strong>How it works:</strong> Upload any image or paste an image URL. Our AI ensemble 
+                analyzes it using 3 different models to detect if it's AI-generated or real.
+            </div>
+        </div>
+        
+        <span class="arrow">&rarr;</span>
+        
+        <div class="results">
+            <span class="results-text" onclick="if(window.innerWidth < 701) goBack();"><p class = "light"></p>
+                Awaiting image upload...
+            </span>
+        </div>
+    </div>
+    
+    <!-- Modal for enlarged images -->
+    <div id="imageModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+         background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center;">
+        <img id="modalImage" src="" style="max-width: 90%; max-height: 90%; border-radius: 10px;">
+        <button onclick="closeModal()" style="position: absolute; top: 20px; right: 20px; 
+                background: #e74c3c; color: white; border: none; padding: 10px 15px; 
+                border-radius: 5px; cursor: pointer;">✕ Close</button>
+    </div>
+    
+    <script src="javascript.js"></script>
+    <script>
+        // Status check on load
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusElement = document.getElementById('api-status');
+            const statusIndicator = document.getElementById('status-indicator');
+            
+            if (statusElement) {
+                statusElement.style.display = 'inline-block';
+                
+                fetch('/health')
+                    .then(response => {
+                        if (!response.ok) throw new Error('Server not responding');
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.models_loaded) {
+                            statusElement.innerHTML = '✅ System Ready';
+                            statusElement.style.background = 'rgba(46, 204, 113, 0.3)';
+                            statusElement.style.color = '#2ecc71';
+                        } else {
+                            statusElement.innerHTML = '⚠️ Models Loading';
+                            statusElement.style.background = 'rgba(243, 156, 18, 0.3)';
+                            statusElement.style.color = '#f39c12';
+                        }
+                    })
+                    .catch(error => {
+                        statusElement.innerHTML = '❌ Server Offline';
+                        statusElement.style.background = 'rgba(231, 76, 60, 0.3)';
+                        statusElement.style.color = '#e74c3c';
+                        
+                        // Show alert after a delay
+                        setTimeout(() => {
+                            alert('⚠️ Backend server not detected!\n\nPlease make sure:\n1. app.py is running\n2. Python dependencies are installed\n3. Model files are in python/ folder');
+                        }, 1000);
+                    });
+            }
+            
+            // Update file info display
+            const fileInput = document.getElementById('imageInput');
+            const fileInfo = document.getElementById('file-info');
+            
+            if (fileInput && fileInfo) {
+                fileInput.addEventListener('change', function() {
+                    if (this.files && this.files[0]) {
+                        const file = this.files[0];
+                        const fileSize = (file.size / (1024 * 1024)).toFixed(2);
+                        fileInfo.innerHTML = `Selected: ${file.name} (${fileSize} MB)`;
+                        fileInfo.style.display = 'block';
+                    } else {
+                        fileInfo.innerHTML = 'No file selected';
+                        fileInfo.style.display = 'none';
+                    }
+                });
+            }
+        });
+        
+        function closeModal() {
+            document.getElementById('imageModal').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
